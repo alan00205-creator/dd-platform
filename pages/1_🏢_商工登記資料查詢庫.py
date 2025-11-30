@@ -48,44 +48,45 @@ def clean_company_name(name):
             break
     return name
 
-# --- [新功能] 關鍵字清單搜尋 (給單筆查詢用) ---
+# --- [修正] 關鍵字清單搜尋 (給單筆查詢用) ---
 def search_companies_list(keyword):
     """
     輸入關鍵字，回傳所有符合的公司列表 (包含統編、名稱、狀態)
     """
     results = []
+    
+    # 1. 優先嘗試官方 API (資料最準)
     try:
         encoded_name = urllib.parse.quote(keyword)
-        # 使用 like 語法，抓前 50 筆
         url = f"{MOEA_SEARCH_URL}?$format=json&$filter=Company_Name like '{encoded_name}'&$top=50"
-        
-        res = requests.get(url, headers=HEADERS, timeout=10)
+        res = requests.get(url, headers=HEADERS, timeout=8)
         if res.status_code == 200:
             data = res.json()
             if data and isinstance(data, list):
                 for item in data:
                     results.append({
-                        "統一編號": item.get("Business_Accounting_NO", ""),
-                        "公司名稱": item.get("Company_Name", ""),
-                        "公司狀態": item.get("Company_Status_Desc", ""),
-                        "登記機關": item.get("Register_Organization_Desc", ""),
-                        "公司地址": item.get("Company_Location", "")
+                        "統一編號": str(item.get("Business_Accounting_NO", "")),
+                        "公司名稱": str(item.get("Company_Name", "")),
+                        "公司狀態": str(item.get("Company_Status_Desc", "")),
+                        "登記機關": str(item.get("Register_Organization_Desc", "")),
+                        "公司地址": str(item.get("Company_Location", ""))
                     })
     except:
         pass
     
-    # 如果官方沒資料，試試看 g0v (作為備案)
+    # 2. 如果官方沒資料，改用 g0v (作為備案)
     if not results:
         try:
-            res = requests.get(G0V_SEARCH_URL, params={'q': keyword}, headers=HEADERS, timeout=5)
+            res = requests.get(G0V_SEARCH_URL, params={'q': keyword}, headers=HEADERS, timeout=8)
             if res.status_code == 200:
                 data = res.json()
                 if "data" in data:
                     for item in data["data"]:
+                        # g0v 的欄位名稱不一樣，這裡要手動對應
                         results.append({
                             "統一編號": str(item.get("id", "")),
-                            "公司名稱": item.get("name", ""),
-                            "公司狀態": "查詢中", # g0v 列表 API 沒給狀態
+                            "公司名稱": str(item.get("name", "")),
+                            "公司狀態": "(g0v來源)", 
                             "登記機關": "",
                             "公司地址": ""
                         })
@@ -98,7 +99,6 @@ def search_companies_list(keyword):
 def search_moea_keyword(name):
     try:
         encoded_name = urllib.parse.quote(name)
-        # 批量查詢我們還是維持找「核准設立」且「最精準」的邏輯
         query_url = f"{MOEA_SEARCH_URL}?$format=json&$filter=Company_Name like '{encoded_name}' and Company_Status eq 01&$top=20"
         res = requests.get(query_url, headers=HEADERS, timeout=10)
         if res.status_code == 200:
@@ -278,14 +278,17 @@ with tab1:
                     st.success(f"找到 {len(results_list)} 筆符合「{query_input}」的資料：")
                     
                     # 顯示清單表格
-                    df_results = pd.DataFrame(results_list)
+                    # 強制將所有欄位轉為字串，避免 PyArrow 錯誤
+                    df_results = pd.DataFrame(results_list).astype(str)
                     st.dataframe(df_results, use_container_width=True)
                     
                     st.markdown("---")
                     st.write("### 👇 請選擇要查看詳細資料的公司：")
                     
                     # 製作下拉選單選項 (格式: 統編 - 公司名稱)
-                    options = [f"{r['統一編號']} - {r['公司名稱']}" for r in results_list if r['統一編號']]
+                    # 過濾掉統編為空或 None 的資料
+                    valid_options = [r for r in results_list if r.get('統一編號') and r.get('統一編號') != 'None']
+                    options = [f"{r['統一編號']} - {r['公司名稱']}" for r in valid_options]
                     
                     if options:
                         selected_option = st.selectbox("選擇公司", options)
@@ -372,7 +375,7 @@ with tab2:
                         tid, method = raw_id, "統編直查"
                     elif raw_name:
                         time.sleep(random.uniform(0.1, 0.3)) 
-                        found = search_id_smart(raw_name) # 呼叫舊的精準搜尋邏輯 (for Batch)
+                        found = search_id_smart(raw_name) 
                         if found: tid, method = found, f"名稱搜尋({raw_name})"
                     
                     if tid:
