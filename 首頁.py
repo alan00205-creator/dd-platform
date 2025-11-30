@@ -20,7 +20,7 @@ with col1:
     st.markdown("""
     ### 👋 歡迎使用
     本平台專為證券承銷商、財務顧問、投行等從業人員設計，整合多項自動化工具，
-    協助您快速完成KYC與盡職調查(DD)工作，提升工作底稿製作效率。
+    協助您快速完成KYC與盡職調查(DD)工作，以提升工作效率。
 
     ### 🛠️ 目前可用的工具
     請從左側選單選擇您需要的工具：
@@ -46,5 +46,6 @@ with col2:
 st.markdown("---")
 
 st.caption("Designed for Professional Financial Services | Powered by DD Insight")
+
 
 
