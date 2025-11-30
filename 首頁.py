@@ -30,7 +30,7 @@ with col1:
         * 支援「單筆查詢」與「批量查詢 」。
         * 一鍵生成多間公司商工登記資料(包含董監事名單)。
         
-    *(更多工具持續開發中：新聞報導、財務資訊等相關事項查詢...)*
+    *(更多工具持續開發中...)*
     """)
 
 with col2:
@@ -42,3 +42,4 @@ with col2:
 st.markdown("---")
 
 st.caption("Designed for Professional Financial Services | Powered by DD Insight")
+
