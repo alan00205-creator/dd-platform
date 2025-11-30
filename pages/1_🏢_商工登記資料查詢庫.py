@@ -283,7 +283,7 @@ with tab1:
                     target_cols = ['統一編號', '公司名稱', '代表人姓名', '實收資本額(元)', '核准設立日期']
                     df_base = pd.DataFrame([c_data])
                     final_cols = [c for c in target_cols if c in df_base.columns]
-                    st.dataframe(df_base[final_cols], use_container_width=True)
+                    st.dataframe(df_base[final_cols].astype(str), use_container_width=True)
                     
                     with st.expander("查看董監事名單"):
                         if directors:
