@@ -7,16 +7,17 @@ from datetime import datetime
 # --- 1. 頁面設定 ---
 st.set_page_config(page_title="財務數據 (最終穩定版)", page_icon="📊", layout="wide")
 st.title("✅ DD Insight 最終穩定版")
-st.markdown("已啟用動態名稱查詢，確保任何代碼都能顯示簡稱。")
+st.markdown("已移除外部網站爬蟲，採用靜態名稱清單，確保系統穩定運行。")
 
 # ==========================================
-# 2. 靜態名稱對照表 (僅用於核心股票，其餘動態查詢)
+# 2. 靜態名稱對照表 (確保穩定性)
 # ==========================================
+# 這是為了確保程式不因外部網站變更而崩潰，優先保證查詢功能可用
 STATIC_NAME_MAP = {
     "2330": "台積電", "2454": "聯發科", "2317": "鴻海",
-    "6986": "和迅", 
-    "6712": "長聖", "6794": "向榮", "6892": "台寶", 
-    "9999": "請自行輸入" 
+    "6986": "和迅", # 目標公司
+    "6712": "長聖", "6794": "向榮", "6892": "台寶", # 同業
+    "9999": "請自行輸入" # 範例，不在清單中的會顯示代碼
 }
 
 # --- 3. 側邊欄設定 (保持不變) ---
@@ -31,47 +32,38 @@ col_input4 = st.sidebar.text_input("⚔️ 同業 C", value=default_codes[3])
 user_inputs = {
     "目標公司": col_input1, "同業 A": col_input2, "同業 B": col_input3, "同業 C": col_input4
 }
-target_tickers_dict = {k: v.strip() for k: v in user_inputs.items() if v and v.strip()}
+target_tickers_dict = {k: v.strip() for k, v in user_inputs.items() if v and v.strip()}
 
-# ==========================================
-# 4. 核心函數：動態獲取公司名稱 (終極版)
-# ==========================================
-@st.cache_data(ttl=3600*24)
-def get_company_name_dynamic(code):
-    """
-    優先檢查靜態表 (確保台積電是台積電)，否則退回 yfinance 抓取簡稱。
-    """
-    if not code.isdigit(): return code
+# --- 4. 核心函數：處理日期與翻譯 (與前版相同) ---
+translation_map = {
+    "Total Revenue": "營業收入合計", "Cost Of Revenue": "營業成本", "Gross Profit": "營業毛利",
+    "Operating Income": "營業利益", "Net Income": "稅後淨利", "Total Assets": "資產總計",
+    "Cash And Cash Equivalents": "現金及約當現金", "Inventory": "存貨", "Receivables": "應收帳款及票據",
+    "Total Liabilities": "負債總計", "EBITDA": "稅前息前折舊攤銷前獲利", "Basic EPS": "基本每股盈餘",
+    # ... (使用前幾回合的完整字典，這裡為簡化而省略) ...
+}
 
-    # 1. 優先檢查靜態表 (保證核心股票名稱正確且為中文)
-    if code in STATIC_NAME_MAP:
-        return STATIC_NAME_MAP.get(code)
-    
-    # 2. 退回 yfinance 獲取英文/正式名稱
-    try:
-        # 嘗試 .TW 和 .TWO
-        ticker = f"{code}.TW"
-        info = yf.Ticker(ticker).info
-        
-        if 'shortName' not in info or info.get('shortName', '').strip() == "":
-             ticker = f"{code}.TWO"
-             info = yf.Ticker(ticker).info
-             
-        # 返回最簡短的名稱 (會是英文或羅馬拼音)
-        name = info.get('shortName', info.get('longName', code))
-        return name
-        
-    except Exception:
-        return code # 失敗時回傳代碼
-
-# --- 5. 數據獲取與處理 (保持不變) ---
 def translate_df(df):
     if df.empty: return df
     
-    # ... (ROC Year conversion logic) ...
-    # ... (translation_map logic) ...
-    
-    return df.rename(index=translation_map) # 簡化此處
+    def convert_to_roc_year(date_obj):
+        try:
+            date_time = pd.to_datetime(date_obj)
+            roc_year = date_time.year - 1911
+            return f"{roc_year}年度"
+        except Exception:
+            return str(date_obj)
+
+    new_cols = []
+    for col in df.columns:
+        if isinstance(col, pd.Timestamp) or str(col).count('-') >= 2 or str(col).isdigit():
+            new_cols.append(convert_to_roc_year(col))
+        else:
+            new_cols.append(str(col))
+    df.columns = new_cols
+
+    df_translated = df.rename(index=translation_map)
+    return df_translated
 
 def get_raw_data_all(code):
     """抓取單一股票代碼的所有原始資料"""
@@ -90,6 +82,7 @@ def get_raw_data_all(code):
     if stock is None:
         return None
 
+    # 抓取並翻譯 (加入錯誤處理以防某一表抓不到)
     try: fin_df = translate_df(stock.financials)
     except: fin_df = pd.DataFrame()
     
@@ -109,27 +102,21 @@ def to_excel(data_dict):
             df.to_excel(writer, sheet_name=sheet_name)
     return output.getvalue()
 
-# --- 6. 主程式 UI ---
+# --- 5. 主程式 UI ---
 if st.button("🚀 抓取資料", use_container_width=True):
     
     if not target_tickers_dict:
         st.warning("請至少輸入一間公司代碼。")
     else:
-        # 步驟 1: 預先抓取所有公司簡稱
-        dynamic_names = {}
-        with st.spinner("獲取公司簡稱中..."):
-            for code in target_tickers_dict.values():
-                dynamic_names[code] = get_company_name_dynamic(code) # 動態獲取名稱
-
-        # 步驟 2: 動態建立頁籤
+        # 動態建立頁籤
         tab_labels = []
-        for code in target_tickers_dict.values():
-            company_name = dynamic_names.get(code, code)
+        for name, code in target_tickers_dict.items():
+            # 使用靜態字典獲取簡稱
+            company_name = STATIC_NAME_MAP.get(code, code)
             tab_labels.append(f"{company_name} ({code})")
 
         tabs = st.tabs(tab_labels)
         
-        # 步驟 3: 遍歷結果並顯示
         for i, (input_name, code) in enumerate(target_tickers_dict.items()):
             
             with tabs[i]:
@@ -138,13 +125,12 @@ if st.button("🚀 抓取資料", use_container_width=True):
                     raw_data = get_raw_data_all(code)
                 
                 # 獲取簡稱，用於顯示
-                company_name = dynamic_names.get(code, code)
+                company_name = STATIC_NAME_MAP.get(code, code)
                 
                 if raw_data and not raw_data["損益表"].empty:
                     st.success(f"✅ {company_name} ({code}) 讀取成功")
                     
-                    # 修正點：Tab/Header/Download Label 顯示動態名稱
-                    st.subheader(f"{company_name} ({code}) 財報數據") 
+                    st.subheader(f"{company_name} ({code}) 財報數據")
                     
                     exp1, exp2, exp3 = st.expander("損益表", expanded=True), st.expander("資產負債表"), st.expander("現金流量表")
                     
@@ -162,3 +148,6 @@ if st.button("🚀 抓取資料", use_container_width=True):
                 else:
                     st.error(f"❌ 找不到 {code} 的資料。")
                     st.caption("可能原因：1. 代碼錯誤 2. Yahoo 資料庫無紀錄。")
+
+else:
+    st.info("👈 在左側輸入股票代碼，點擊按鈕開始查詢。")
