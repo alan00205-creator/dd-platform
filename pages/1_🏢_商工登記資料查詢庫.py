@@ -287,7 +287,8 @@ with tab1:
                     
                     with st.expander("查看董監事名單"):
                         if directors:
-                            st.dataframe(pd.DataFrame(directors), use_container_width=True)
+                            df_dir_show = pd.DataFrame(directors)
+                            st.dataframe(df_dir_show.astype(str), use_container_width=True)
                         else:
                             st.write("無董監事資料")
                             
