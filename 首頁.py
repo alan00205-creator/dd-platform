@@ -29,6 +29,10 @@ with col1:
         * 直連經濟部API。
         * 支援「單筆查詢」與「批量查詢 」。
         * 一鍵生成多間公司商工登記資料(包含董監事名單)。
+    * **🌐 網路新聞資料檢索**
+        * 企業輿情監測與聲譽風險排查 (Red Flag)。
+    * **📈 財務數據分析**
+        * 量化分析財務體質與同業績效比較 (Peer Review)。。
         
     *(更多工具持續開發中...)*
     """)
@@ -42,4 +46,5 @@ with col2:
 st.markdown("---")
 
 st.caption("Designed for Professional Financial Services | Powered by DD Insight")
+
 
